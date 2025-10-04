@@ -5,3 +5,5 @@
 * https://www.rle.mit.edu/news/rle-recent-papers/
 * https://www.tuttartpitturasculturapoesiamusica.com
 *  https://github.com/kashkin-mit/
+*  https://www.theguardian.com/artanddesign/2025/sep/27/caravaggio-the-lute-player-badminton-ai-analysis?utm_source=chatgpt.com
+*  
