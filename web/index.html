@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Collector's Map</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 0;
+      padding: 20px;
+    }
+    svg {
+      background: #fff;
+      border: 1px solid #ccc;
+    }
+    .tooltip {
+      position: absolute;
+      padding: 6px 10px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <h2>Collector's Map of Your Artists</h2>
+  <svg id="collectorMap" width="1000" height="700"></svg>
+  <div class="tooltip" id="tooltip"></div>
+  <script>
+    // Artist data (scaled roughly based on your rankings)
+    const artists = [
+      {name: "Louis Ritman", x:0.55, y:0.6, growth:0.8, accessibility:0.4, forgeryRisk:0.3, emotionalValue:0.8},
+      {name: "Stanislas Lépine", x:0.45, y:0.5, growth:0.8, accessibility:0.4, forgeryRisk:0.2, emotionalValue:0.6},
+      {name: "Compte-Calix", x:0.4, y:0.55, growth:0.6, accessibility:0.6, forgeryRisk:0.2, emotionalValue:0.6},
+      {name: "José Antonio Velásquez", x:0.6, y:0.85, growth:0.9, accessibility:0.7, forgeryRisk:0.1, emotionalValue:0.95},
+      {name: "Richard Zolan", x:0.65, y:0.75, growth:0.6, accessibility:0.8, forgeryRisk:0.2, emotionalValue:0.9},
+      {name: "Makoto Masuda", x:0.7, y:0.8, growth:0.4, accessibility:0.8, forgeryRisk:0.2, emotionalValue:0.9},
+      {name: "Firelei Báez", x:0.85, y:0.9, growth:0.8, accessibility:0.2, forgeryRisk:0.3, emotionalValue:0.7},
+      {name: "Alonsa Guevara", x:0.8, y:0.85, growth:0.8, accessibility:0.3, forgeryRisk:0.2, emotionalValue:0.9},
+      {name: "Giampetrino", x:0.1, y:0.3, growth:0.6, accessibility:0.2, forgeryRisk:0.7, emotionalValue:0.4},
+      {name: "Francesco Guardi", x:0.2, y:0.4, growth:0.7, accessibility:0.2, forgeryRisk:0.6, emotionalValue:0.4},
+      {name: "Giovanni Ghisolfi", x:0.25, y:0.35, growth:0.6, accessibility:0.3, forgeryRisk:0.6, emotionalValue:0.4},
+      {name: "Ascanio Luciani", x:0.3, y:0.5, growth:0.6, accessibility:0.8, forgeryRisk:0.2, emotionalValue:0.6},
+      {name: "José Benlliure y Gil", x:0.35, y:0.55, growth:0.7, accessibility:0.8, forgeryRisk:0.2, emotionalValue:0.6},
+      {name: "Berthe Morisot", x:0.5, y:0.65, growth:0.8, accessibility:0.2, forgeryRisk:0.4, emotionalValue:0.6},
+      {name: "Eugène Delacroix", x:0.35, y:0.6, growth:0.8, accessibility:0.1, forgeryRisk:0.6, emotionalValue:0.5},
+      {name: "Edouard Cortès", x:0.4, y:0.5, growth:0.4, accessibility:0.8, forgeryRisk:0.7, emotionalValue:0.4},
+      {name: "Jean Auguste Dominique Ingres", x:0.15, y:0.4, growth:0.8, accessibility:0.1, forgeryRisk:0.7, emotionalValue:0.3},
+      {name: "Anna Mary Moses", x:0.55, y:0.8, growth:0.8, accessibility:0.3, forgeryRisk:0.2, emotionalValue:0.7}
+    ];
+
+    const svg = d3.select("#collectorMap");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+
+    const xScale = d3.scaleLinear().domain([0,1]).range([80, width-80]);
+    const yScale = d3.scaleLinear().domain([0,1]).range([height-80, 80]);
+
+    // Tooltip
+    const tooltip = d3.select("#tooltip");
+
+    // Draw circles
+    svg.selectAll("circle")
+      .data(artists)
+      .enter()
+      .append("circle")
+        .attr("cx", d => xScale(d.x))
+        .attr("cy", d => yScale(d.y))
+        .attr("r", d => 8 + d.growth*15)
+        .attr("fill", d => d3.interpolateBlues(d.accessibility))
+        .attr("stroke", d => d.forgeryRisk < 0.4 ? "black" : "gray")
+        .attr("stroke-width", 1.5)
+        .attr("stroke-dasharray", d => d.forgeryRisk > 0.6 ? "4,2" : null)
+        .on("mousemove", (event, d) => {
+          tooltip.style("opacity", 1)
+                 .html(`<strong>${d.name}</strong><br>Growth: ${d.growth}<br>Accessibility: ${d.accessibility}<br>Forgery Risk: ${d.forgeryRisk}`)
+                 .style("left", (event.pageX + 10) + "px")
+                 .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", () => tooltip.style("opacity", 0));
+
+    // Labels
+    svg.selectAll("text")
+      .data(artists)
+      .enter()
+      .append("text")
+        .attr("x", d => xScale(d.x) + 12)
+        .attr("y", d => yScale(d.y) + 4)
+        .text(d => d.name)
+        .style("font-size", "10px");
+
+    // Axes
+    const xAxis = d3.axisBottom(xScale).ticks(4).tickFormat((d,i) => i===0?"Historic/Traditional":i===3?"Contemporary/Expressive":"");
+    const yAxis = d3.axisLeft(yScale).ticks(4).tickFormat((d,i) => i===0?"Formal/Classical":i===3?"Emotional/Expressive":"");
+
+    svg.append("g")
+       .attr("transform", `translate(0,${height-80})`)
+       .call(xAxis);
+    svg.append("g")
+       .attr("transform", `translate(80,0)`)
+       .call(yAxis);
+  </script>
+</body>
+</html>
