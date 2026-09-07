@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Pure ASCII City</title>
+
+<style>
+html, body {
+    margin: 0;
+    background: black;
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    background: black;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="canvas"></canvas>
+
+<script>
+
+// ============================================================
+// PURE ASCII CITY
+//
+// No libraries
+// No 3D engine
+// No textures
+// No models
+//
+// World -> rays -> intersections -> light -> ASCII
+// ============================================================
+
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+
+// ============================================================
+// ASCII SCREEN
+// ============================================================
+
+const CELL_W = 9;
+const CELL_H = 14;
+
+let COLS;
+let ROWS;
+let W;
+let H;
+
+
+function resize() {
+
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+
+    COLS = Math.floor(W / CELL_W);
+    ROWS = Math.floor(H / CELL_H);
+
+    ctx.font = CELL_H + "px monospace";
+    ctx.textBaseline = "top";
+}
+
+window.addEventListener("resize", resize);
+
+resize();
+
+
+// ============================================================
+// ASCII BRIGHTNESS TABLE
+//
+// left = dark
+// right = bright
+// ============================================================
+
+const SHADES = " .:-=+*#%@";
+
+
+// ============================================================
+// WORLD
+// ============================================================
+
+const ROAD_WIDTH = 12;
+
+const camera = {
+
+    x: 0,
+
+    y: 2.0,
+
+    z: 0,
+
+    yaw: 0
+};
+
+
+// ============================================================
+// BUILDINGS
+//
+// Axis aligned boxes:
+//
+// x1 x2
+// y1 y2
+// z1 z2
+// ============================================================
+
+let buildings = [];
+
+
+// ============================================================
+// DETERMINISTIC RANDOM
+//
+// Same city every time.
+// ============================================================
+
+function hash(n) {
+
+    const x =
+        Math.sin(n * 12.9898) *
+        43758.5453;
+
+    return x - Math.floor(x);
+}
+
+
+// ============================================================
+// GENERATE CITY
+// ============================================================
+
+function generateCity() {
+
+    buildings = [];
+
+    const BLOCK = 18;
+
+    for (let i = 0; i < 100; i++) {
+
+        const z = i * BLOCK;
+
+
+        // ----------------------------------------------------
+        // LEFT BUILDING
+        // ----------------------------------------------------
+
+        let width =
+            5 + hash(i * 31) * 6;
+
+        let depth =
+            10 + hash(i * 43) * 7;
+
+        let height =
+            6 + hash(i * 71) * 18;
+
+
+        buildings.push({
+
+            x1: -ROAD_WIDTH/2 - 2 - width,
+
+            x2: -ROAD_WIDTH/2 - 2,
+
+            y1: 0,
+
+            y2: height,
+
+            z1: z,
+
+            z2: z + depth,
+
+            seed: i * 31
+        });
+
+
+        // ----------------------------------------------------
+        // RIGHT BUILDING
+        // ----------------------------------------------------
+
+        width =
+            5 + hash(i * 83) * 6;
+
+        depth =
+            10 + hash(i * 97) * 7;
+
+        height =
+            6 + hash(i * 101) * 18;
+
+
+        buildings.push({
+
+            x1: ROAD_WIDTH/2 + 2,
+
+            x2: ROAD_WIDTH/2 + 2 + width,
+
+            y1: 0,
+
+            y2: height,
+
+            z1: z + 4,
+
+            z2: z + 4 + depth,
+
+            seed: i * 83
+        });
+
+    }
+
+}
+
+generateCity();
+
+
+// ============================================================
+// RAY / BOX INTERSECTION
+//
+// This is the heart of the renderer.
+//
+// Ray:
+//
+// P = origin + t * direction
+//
+// We find the first point where the ray hits a building.
+// ============================================================
+
+function rayBox(ox, oy, oz, dx, dy, dz, box) {
+
+    let tmin = -Infinity;
+    let tmax = Infinity;
+
+    let normalX = 0;
+    let normalY = 0;
+    let normalZ = 0;
+
+
+    // --------------------------------------------------------
+    // X slabs
+    // --------------------------------------------------------
+
+    if (Math.abs(dx) < 0.000001) {
+
+        if (ox < box.x1 || ox > box.x2)
+            return null;
+
+    } else {
+
+        let tx1 = (box.x1 - ox) / dx;
+        let tx2 = (box.x2 - ox) / dx;
+
+        let nx = -1;
+
+        if (tx1 > tx2) {
+
+            [tx1, tx2] = [tx2, tx1];
+
+            nx = 1;
+        }
+
+        if (tx1 > tmin) {
+
+            tmin = tx1;
+
+            normalX = nx;
+            normalY = 0;
+            normalZ = 0;
+        }
+
+        tmax = Math.min(tmax, tx2);
+
+        if (tmin > tmax)
+            return null;
+    }
+
+
+    // --------------------------------------------------------
+    // Y slabs
+    // --------------------------------------------------------
+
+    if (Math.abs(dy) < 0.000001) {
+
+        if (oy < box.y1 || oy > box.y2)
+            return null;
+
+    } else {
+
+        let ty1 = (box.y1 - oy) / dy;
+        let ty2 = (box.y2 - oy) / dy;
+
+        let ny = -1;
+
+        if (ty1 > ty2) {
+
+            [ty1, ty2] = [ty2, ty1];
+
+            ny = 1;
+        }
+
+        if (ty1 > tmin) {
+
+            tmin = ty1;
+
+            normalX = 0;
+            normalY = ny;
+            normalZ = 0;
+        }
+
+        tmax = Math.min(tmax, ty2);
+
+        if (tmin > tmax)
+            return null;
+    }
+
+
+    // --------------------------------------------------------
+    // Z slabs
+    // --------------------------------------------------------
+
+    if (Math.abs(dz) < 0.000001) {
+
+        if (oz < box.z1 || oz > box.z2)
+            return null;
+
+    } else {
+
+        let tz1 = (box.z1 - oz) / dz;
+        let tz2 = (box.z2 - oz) / dz;
+
+        let nz = -1;
+
+        if (tz1 > tz2) {
+
+            [tz1, tz2] = [tz2, tz1];
+
+            nz = 1;
+        }
+
+        if (tz1 > tmin) {
+
+            tmin = tz1;
+
+            normalX = 0;
+            normalY = 0;
+            normalZ = nz;
+        }
+
+        tmax = Math.min(tmax, tz2);
+
+        if (tmin > tmax)
+            return null;
+    }
+
+
+    if (tmin < 0)
+        return null;
+
+
+    return {
+
+        t: tmin,
+
+        nx: normalX,
+        ny: normalY,
+        nz: normalZ
+    };
+}
+
+
+// ============================================================
+// GROUND INTERSECTION
+//
+// Ground plane:
+//
+// y = 0
+// ============================================================
+
+function rayGround(ox, oy, oz, dx, dy, dz) {
+
+    if (dy >= 0)
+        return null;
+
+    const t = -oy / dy;
+
+    if (t <= 0)
+        return null;
+
+    return {
+
+        t: t,
+
+        x: ox + dx * t,
+
+        z: oz + dz * t
+    };
+}
+
+
+// ============================================================
+// WINDOW PATTERN
+//
+// We aren't using textures.
+//
+// We mathematically decide whether the hit point corresponds
+// to a window.
+// ============================================================
+
+function windowAt(x, y, z, box) {
+
+    if (y < 1.5)
+        return false;
+
+    const floor =
+        Math.floor(y / 2.2);
+
+    let horizontal;
+
+
+    // front/back wall
+
+    if (
+        Math.abs(z - box.z1) < .1 ||
+        Math.abs(z - box.z2) < .1
+    ) {
+
+        horizontal =
+            Math.floor((x - box.x1) / 1.7);
+
+    }
+
+    // side wall
+
+    else {
+
+        horizontal =
+            Math.floor((z - box.z1) / 1.7);
+
+    }
+
+
+    const r =
+        hash(
+            box.seed +
+            floor * 31 +
+            horizontal * 17
+        );
+
+
+    return r > .56;
+}
+
+
+// ============================================================
+// LIGHTING
+//
+// Fake directional moon / city light.
+//
+// Lambert lighting:
+//
+// brightness = normal dot light
+// ============================================================
+
+const LIGHT = {
+
+    x: -0.45,
+
+    y: 0.75,
+
+    z: -0.50
+};
+
+
+function lighting(nx, ny, nz) {
+
+    let dot =
+
+        nx * LIGHT.x +
+        ny * LIGHT.y +
+        nz * LIGHT.z;
+
+
+    dot = Math.max(0, dot);
+
+
+    return .18 + dot * .82;
+}
+
+
+// ============================================================
+// ASCII CHARACTER FROM BRIGHTNESS
+// ============================================================
+
+function shade(brightness) {
+
+    brightness =
+        Math.max(
+            0,
+            Math.min(1, brightness)
+        );
+
+
+    const index =
+        Math.floor(
+            brightness *
+            (SHADES.length - 1)
+        );
+
+
+    return SHADES[index];
+}
+
+
+// ============================================================
+// MAIN RAY TRACE
+//
+// One ray PER CHARACTER.
+//
+// This is why this is genuinely ASCII rendering.
+// ============================================================
+
+function traceRay(dx, dy, dz) {
+
+    let closest = Infinity;
+
+    let hit = null;
+
+
+    // --------------------------------------------------------
+    // BUILDINGS
+    // --------------------------------------------------------
+
+    for (let box of buildings) {
+
+        // skip far behind camera
+
+        if (box.z2 < camera.z - 5)
+            continue;
+
+
+        let result =
+            rayBox(
+
+                camera.x,
+                camera.y,
+                camera.z,
+
+                dx,
+                dy,
+                dz,
+
+                box
+            );
+
+
+        if (
+            result &&
+            result.t < closest
+        ) {
+
+            closest = result.t;
+
+            hit = {
+
+                type: "building",
+
+                box: box,
+
+                ...result
+            };
+        }
+    }
+
+
+    // --------------------------------------------------------
+    // GROUND
+    // --------------------------------------------------------
+
+    let ground =
+        rayGround(
+
+            camera.x,
+            camera.y,
+            camera.z,
+
+            dx,
+            dy,
+            dz
+        );
+
+
+    if (
+        ground &&
+        ground.t < closest
+    ) {
+
+        closest = ground.t;
+
+        hit = {
+
+            type: "ground",
+
+            ...ground
+        };
+    }
+
+
+    return hit;
+}
+
+
+// ============================================================
+// RENDER BUILDING HIT
+// ============================================================
+
+function renderBuilding(hit, dx, dy, dz) {
+
+    const t = hit.t;
+
+
+    const x =
+        camera.x + dx * t;
+
+    const y =
+        camera.y + dy * t;
+
+    const z =
+        camera.z + dz * t;
+
+
+    let bright =
+        lighting(
+            hit.nx,
+            hit.ny,
+            hit.nz
+        );
+
+
+    // --------------------------------------------------------
+    // DISTANCE FOG
+    // --------------------------------------------------------
+
+    let fog =
+        Math.max(
+            0,
+            1 - t / 130
+        );
+
+
+    bright *= fog;
+
+
+    // --------------------------------------------------------
+    // WINDOWS
+    // --------------------------------------------------------
+
+    if (
+        windowAt(
+            x,
+            y,
+            z,
+            hit.box
+        )
+    ) {
+
+        let r =
+            hash(
+                hit.box.seed +
+                Math.floor(y * 13) +
+                Math.floor(x * 7) +
+                Math.floor(z * 5)
+            );
+
+
+        if (r > .60)
+
+            bright =
+                Math.min(
+                    1,
+                    bright + .55
+                );
+    }
+
+
+    return shade(bright);
+}
+
+
+// ============================================================
+// RENDER GROUND
+// ============================================================
+
+function renderGround(hit) {
+
+    const x = hit.x;
+    const z = hit.z;
+
+    const distance = hit.t;
+
+
+    // --------------------------------------------------------
+    // ROAD
+    // --------------------------------------------------------
+
+    if (
+        Math.abs(x) <
+        ROAD_WIDTH / 2
+    ) {
+
+        // center dashed line
+
+        if (
+            Math.abs(x) < .13 &&
+            Math.floor(z / 3) % 2 === 0
+        ) {
+
+            return "+";
+        }
+
+
+        // road edge
+
+        if (
+            Math.abs(
+                Math.abs(x) -
+                ROAD_WIDTH/2
+            ) < .15
+        ) {
+
+            return "|";
+        }
+
+
+        let b =
+            .18 *
+            Math.max(
+                0,
+                1 - distance/100
+            );
+
+
+        return shade(b);
+    }
+
+
+    // --------------------------------------------------------
+    // SIDEWALK
+    // --------------------------------------------------------
+
+    let grid =
+
+        (
+            Math.floor(x * 1.3) +
+            Math.floor(z * 1.3)
+        ) % 2;
+
+
+    let b =
+        grid === 0
+        ? .25
+        : .16;
+
+
+    b *=
+        Math.max(
+            0,
+            1 - distance/100
+        );
+
+
+    return shade(b);
+}
+
+
+// ============================================================
+// SKY
+// ============================================================
+
+function renderSky(row) {
+
+    let height =
+        1 - row / ROWS;
+
+
+    let brightness =
+        .02 +
+        height * .05;
+
+
+    return shade(brightness);
+}
+
+
+// ============================================================
+// PEDESTRIANS
+//
+// These are intentionally handled separately.
+//
+// They are projected mathematical stick people represented
+// by ASCII characters.
+// ============================================================
+
+let people = [];
+
+function generatePeople() {
+
+    people = [];
+
+    for (let i = 0; i < 25; i++) {
+
+        let side =
+            i % 2 === 0
+            ? -1
+            : 1;
+
+
+        people.push({
+
+            x:
+                side *
+                (
+                    ROAD_WIDTH/2 +
+                    .8
+                ),
+
+            z:
+                10 +
+                i * 12,
+
+            speed:
+                .5 +
+                hash(i * 91),
+
+            phase:
+                hash(i * 17) *
+                Math.PI * 2
+        });
+    }
+}
+
+generatePeople();
+
+
+// ============================================================
+// PROJECT 3D POINT
+//
+// Used only for small objects like pedestrians.
+// Main world uses rays.
+// ============================================================
+
+function projectPoint(x, y, z) {
+
+    let px = x - camera.x;
+    let py = y - camera.y;
+    let pz = z - camera.z;
+
+
+    // camera yaw rotation
+
+    const cos =
+        Math.cos(camera.yaw);
+
+    const sin =
+        Math.sin(camera.yaw);
+
+
+    let rx =
+        px * cos -
+        pz * sin;
+
+    let rz =
+        px * sin +
+        pz * cos;
+
+
+    if (rz <= .1)
+        return null;
+
+
+    const focal =
+        COLS * .85;
+
+
+    return {
+
+        col:
+            COLS/2 +
+            rx / rz * focal,
+
+        row:
+            ROWS/2 -
+            py / rz * focal * .5,
+
+        depth:
+            rz
+    };
+}
+
+
+// ============================================================
+// CHARACTER BUFFER
+// ============================================================
+
+let buffer;
+
+
+// ============================================================
+// RENDER WORLD
+// ============================================================
+
+function render() {
+
+    buffer = new Array(
+        COLS * ROWS
+    );
+
+
+    const aspect =
+        COLS / ROWS;
+
+
+    // --------------------------------------------------------
+    // CAST RAYS
+    // --------------------------------------------------------
+
+    for (
+        let row = 0;
+        row < ROWS;
+        row++
+    ) {
+
+        for (
+            let col = 0;
+            col < COLS;
+            col++
+        ) {
+
+            // normalized screen coordinates
+
+            let sx =
+                (
+                    col / COLS -
+                    .5
+                ) * 1.7;
+
+
+            let sy =
+                (
+                    .5 -
+                    row / ROWS
+                ) * 1.15;
+
+
+            // ------------------------------------------------
+            // CAMERA RAY
+            // ------------------------------------------------
+
+            let dx = sx;
+            let dy = sy;
+            let dz = 1;
+
+
+            // yaw rotation
+
+            const cos =
+                Math.cos(camera.yaw);
+
+            const sin =
+                Math.sin(camera.yaw);
+
+
+            let rdx =
+                dx * cos +
+                dz * sin;
+
+            let rdz =
+                -dx * sin +
+                dz * cos;
+
+
+            dx = rdx;
+            dz = rdz;
+
+
+            // normalize ray
+
+            let length =
+                Math.sqrt(
+                    dx*dx +
+                    dy*dy +
+                    dz*dz
+                );
+
+
+            dx /= length;
+            dy /= length;
+            dz /= length;
+
+
+            // ------------------------------------------------
+            // TRACE
+            // ------------------------------------------------
+
+            let hit =
+                traceRay(
+                    dx,
+                    dy,
+                    dz
+                );
+
+
+            let character;
+
+
+            if (!hit) {
+
+                character =
+                    renderSky(row);
+
+            }
+
+            else if (
+                hit.type ===
+                "building"
+            ) {
+
+                character =
+                    renderBuilding(
+                        hit,
+                        dx,
+                        dy,
+                        dz
+                    );
+
+            }
+
+            else {
+
+                character =
+                    renderGround(hit);
+
+            }
+
+
+            buffer[
+                row * COLS + col
+            ] = character;
+        }
+    }
+
+
+    // --------------------------------------------------------
+    // PEOPLE
+    // --------------------------------------------------------
+
+    renderPeople();
+
+
+    // --------------------------------------------------------
+    // DRAW ASCII BUFFER
+    // --------------------------------------------------------
+
+    ctx.fillStyle = "black";
+
+    ctx.fillRect(
+        0,
+        0,
+        W,
+        H
+    );
+
+
+    ctx.fillStyle =
+        "#9ab8ad";
+
+
+    ctx.font =
+        CELL_H +
+        "px monospace";
+
+
+    for (
+        let row = 0;
+        row < ROWS;
+        row++
+    ) {
+
+        let line = "";
+
+        for (
+            let col = 0;
+            col < COLS;
+            col++
+        ) {
+
+            line +=
+                buffer[
+                    row * COLS +
+                    col
+                ];
+        }
+
+
+        ctx.fillText(
+            line,
+            0,
+            row * CELL_H
+        );
+    }
+
+
+    // --------------------------------------------------------
+    // HUD
+    // --------------------------------------------------------
+
+    ctx.fillStyle =
+        "#668078";
+
+    ctx.font =
+        "12px monospace";
+
+
+    ctx.fillText(
+        "PURE ASCII CITY",
+        12,
+        18
+    );
+
+
+    ctx.fillText(
+        "NO LIBRARIES // RAY CAST ASCII",
+        12,
+        34
+    );
+}
+
+
+// ============================================================
+// PEOPLE INTO CHARACTER BUFFER
+// ============================================================
+
+function renderPeople() {
+
+    for (let p of people) {
+
+        let projection =
+            projectPoint(
+                p.x,
+                1.2,
+                p.z
+            );
+
+
+        if (!projection)
+            continue;
+
+
+        if (
+            projection.depth >
+            80
+        )
+            continue;
+
+
+        let col =
+            Math.floor(
+                projection.col
+            );
+
+
+        let row =
+            Math.floor(
+                projection.row
+            );
+
+
+        if (
+            col < 1 ||
+            col >= COLS-1 ||
+            row < 1 ||
+            row >= ROWS-1
+        )
+            continue;
+
+
+        // person becomes larger
+        // when closer
+
+        let size =
+            Math.max(
+                1,
+                Math.floor(
+                    10 /
+                    projection.depth
+                    * 4
+                )
+            );
+
+
+        // head
+
+        setChar(
+            col,
+            row - size,
+            "O"
+        );
+
+
+        // body
+
+        for (
+            let j = 0;
+            j < size;
+            j++
+        ) {
+
+            setChar(
+                col,
+                row + j,
+                "|"
+            );
+        }
+
+
+        // legs
+
+        setChar(
+            col - 1,
+            row + size,
+            "/"
+        );
+
+        setChar(
+            col + 1,
+            row + size,
+            "\\"
+        );
+    }
+}
+
+
+// ============================================================
+// SAFE CHARACTER WRITE
+// ============================================================
+
+function setChar(col, row, c) {
+
+    if (
+        col < 0 ||
+        col >= COLS ||
+        row < 0 ||
+        row >= ROWS
+    )
+        return;
+
+
+    buffer[
+        row * COLS +
+        col
+    ] = c;
+}
+
+
+// ============================================================
+// ANIMATION
+// ============================================================
+
+let last =
+    performance.now();
+
+
+function animate(time) {
+
+    const dt =
+        Math.min(
+            .05,
+            (time - last) /
+            1000
+        );
+
+    last = time;
+
+
+    // --------------------------------------------------------
+    // WALK FORWARD
+    // --------------------------------------------------------
+
+    camera.z +=
+        3.2 * dt;
+
+
+    // gentle walking movement
+
+    camera.x =
+        Math.sin(
+            time * .0005
+        ) * .25;
+
+
+    camera.y =
+        2 +
+        Math.sin(
+            time * .006
+        ) * .035;
+
+
+    // --------------------------------------------------------
+    // PEOPLE WALK
+    // --------------------------------------------------------
+
+    for (let p of people) {
+
+        p.z -=
+            p.speed * dt;
+
+
+        if (
+            p.z <
+            camera.z + 2
+        ) {
+
+            p.z += 180;
+        }
+    }
+
+
+    // --------------------------------------------------------
+    // LOOP WORLD
+    // --------------------------------------------------------
+
+    if (
+        camera.z >
+        1000
+    ) {
+
+        camera.z -=
+            900;
+
+
+        for (let p of people)
+
+            p.z -=
+                900;
+    }
+
+
+    render();
+
+
+    requestAnimationFrame(
+        animate
+    );
+}
+
+
+// ============================================================
+// START
+// ============================================================
+
+requestAnimationFrame(
+    animate
+);
+
+</script>
+
+</body>
+</html>
