@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mathematical Bird Experiment</title>
+
+<style>
+body {
+    background: white;
+    font-family: monospace;
+    margin: 20px;
+}
+
+canvas {
+    border: 1px solid #aaa;
+    display: block;
+    margin-bottom: 20px;
+}
+
+.control {
+    margin: 7px 0;
+}
+
+label {
+    display: inline-block;
+    width: 150px;
+}
+
+input {
+    width: 300px;
+}
+
+.value {
+    display: inline-block;
+    width: 60px;
+    margin-left: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Mathematical Bird</h2>
+
+<p>
+Every line is generated mathematically.
+There is no stored bird geometry.
+</p>
+
+<canvas id="canvas" width="900" height="600"></canvas>
+
+<div id="controls"></div>
+
+<script>
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const parameters = [
+
+    ["wingHeight",   "Wing height",    160, 20, 300, 1],
+    ["wingCurve",    "Wing curvature", 1.5, 0.2, 4, .05],
+    ["wingWave",     "Wing wave",      50, 0, 150, 1],
+
+    ["bodyDepth",    "Body depth",     70, 10, 150, 1],
+
+    ["tailSpread",   "Tail spread",    130, 10, 250, 1],
+
+    ["phase",        "Phase",          0.0, -3.14, 3.14, .01],
+
+    ["frequency",    "Frequency",      2.0, .2, 8, .05],
+
+    ["power",        "Power",          1.7, .3, 4, .05]
+];
+
+let values = {};
+
+const controls = document.getElementById("controls");
+
+parameters.forEach(p => {
+
+    const [name,label,value,min,max,step] = p;
+
+    values[name] = value;
+
+    let div = document.createElement("div");
+    div.className = "control";
+
+    let lab = document.createElement("label");
+    lab.innerHTML = label;
+
+    let slider = document.createElement("input");
+
+    slider.type = "range";
+    slider.min = min;
+    slider.max = max;
+    slider.step = step;
+    slider.value = value;
+
+    let output = document.createElement("span");
+    output.className = "value";
+    output.innerHTML = value;
+
+    slider.oninput = function() {
+
+        values[name] = Number(this.value);
+
+        output.innerHTML =
+            Number(this.value).toFixed(2);
+
+        draw();
+    };
+
+    div.appendChild(lab);
+    div.appendChild(slider);
+    div.appendChild(output);
+
+    controls.appendChild(div);
+});
+
+
+function draw() {
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = .7;
+
+    const cx = 450;
+    const cy = 320;
+
+    const N = 500;
+
+    for(let i=0;i<N;i++) {
+
+        let t = i/(N-1);
+
+        /*
+        ----------------------------------
+        POINT P
+
+        Upper wing curve
+        ----------------------------------
+        */
+
+        let x1 =
+            cx
+            - 360
+            + 720*t;
+
+        let envelope =
+            Math.pow(
+                Math.sin(Math.PI*t),
+                values.wingCurve
+            );
+
+        let y1 =
+            cy
+            - values.wingHeight * envelope
+            - values.wingWave *
+              Math.sin(
+                  values.frequency*Math.PI*t
+                  + values.phase
+              ) * envelope;
+
+
+        /*
+        ----------------------------------
+        POINT Q
+
+        Lower body / tail curve
+        ----------------------------------
+        */
+
+        let warped =
+            Math.pow(t,values.power);
+
+        let x2 =
+            cx
+            - 250
+            + 500*warped;
+
+        let bodyEnvelope =
+            Math.sin(Math.PI*t);
+
+        let y2 =
+            cy
+            + values.bodyDepth*bodyEnvelope;
+
+
+        /*
+        Tail deformation
+        */
+
+        let tail =
+            Math.pow(1-t,4);
+
+        x2 -= values.tailSpread*tail;
+
+        y2 += values.tailSpread*.35*tail;
+
+
+        /*
+        Draw line P(t) -> Q(t)
+        */
+
+        ctx.beginPath();
+
+        ctx.moveTo(x1,y1);
+        ctx.lineTo(x2,y2);
+
+        ctx.stroke();
+    }
+
+
+    /*
+    Small mathematical head
+
+    Again: generated from equations.
+    */
+
+    ctx.beginPath();
+
+    for(let i=0;i<=100;i++) {
+
+        let a =
+            2*Math.PI*i/100;
+
+        let x =
+            cx + 250
+            + 25*Math.cos(a);
+
+        let y =
+            cy
+            - 5
+            + 18*Math.sin(a);
+
+        if(i===0)
+            ctx.moveTo(x,y);
+        else
+            ctx.lineTo(x,y);
+    }
+
+    ctx.stroke();
+
+
+    /*
+    Beak
+    */
+
+    ctx.beginPath();
+
+    ctx.moveTo(cx+275,cy-8);
+    ctx.lineTo(cx+315,cy);
+    ctx.lineTo(cx+275,cy+4);
+
+    ctx.stroke();
+}
+
+draw();
+
+</script>
+
+</body>
+</html>
