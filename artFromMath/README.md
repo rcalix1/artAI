@@ -8,5 +8,6 @@
 * https://rcalix1.github.io/artAI/artFromMath/math_bird.html
 * https://rcalix1.github.io/artAI/artFromMath/math_art_lab.html
 * https://rcalix1.github.io/artAI/artFromMath/fourier_art_lab.html
+* https://rcalix1.github.io/artAI/artFromMath/fourier_art_lab2.html
 
 
