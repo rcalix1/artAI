@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Fourier Mathematical Art Lab</title>
+
+<style>
+body {
+    font-family: monospace;
+    margin: 20px;
+    background: #eee;
+}
+
+.main {
+    display: flex;
+    gap: 25px;
+    align-items: flex-start;
+}
+
+canvas {
+    background: white;
+    border: 1px solid #777;
+}
+
+.panel {
+    width: 470px;
+    background: white;
+    border: 1px solid #aaa;
+    padding: 15px;
+}
+
+.control {
+    margin: 6px 0;
+}
+
+label {
+    display: inline-block;
+    width: 130px;
+}
+
+input[type=range] {
+    width: 230px;
+}
+
+.value {
+    display: inline-block;
+    width: 55px;
+    text-align: right;
+}
+
+select {
+    font-family: monospace;
+    font-size: 16px;
+    width: 220px;
+}
+
+.section {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid #ccc;
+    font-weight: bold;
+}
+
+.vector {
+    margin-top: 15px;
+    padding: 10px;
+    background: #111;
+    color: #0f0;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Fourier Mathematical Art Laboratory</h2>
+
+<p>
+Each blob is a sum of mathematical waves.
+Move the sliders to sculpt the curves.
+</p>
+
+<div class="main">
+
+<canvas id="canvas" width="750" height="650"></canvas>
+
+<div class="panel">
+
+<b>Select mathematical blob</b><br><br>
+
+<select id="component"></select>
+
+<div id="controls"></div>
+
+<div class="vector" id="vector"></div>
+
+</div>
+</div>
+
+
+<script>
+
+const canvas =
+    document.getElementById("canvas");
+
+const ctx =
+    canvas.getContext("2d");
+
+
+// =====================================================
+// BLOBS
+// =====================================================
+
+const blobs = [
+
+{
+ name:"Blue Wing",
+ x:310, y:280,
+ scale:1,
+ rotation:-0.2,
+
+ ax:[180,40,15,8,5],
+ ay:[80,50,20,10,5],
+
+ px:[0,0,0,0,0],
+ py:[0,0,0,0,0],
+
+ r:40,g:100,b:230,
+ alpha:.35
+},
+
+{
+ name:"Red Wing",
+ x:430, y:280,
+ scale:1,
+ rotation:.2,
+
+ ax:[180,-40,20,10,5],
+ ay:[80,45,-20,8,5],
+
+ px:[0,.5,0,0,0],
+ py:[0,0,.4,0,0],
+
+ r:230,g:60,b:60,
+ alpha:.35
+},
+
+{
+ name:"Orange Body",
+ x:390,y:370,
+ scale:1,
+ rotation:0,
+
+ ax:[130,20,5,0,0],
+ ay:[45,15,5,0,0],
+
+ px:[0,0,0,0,0],
+ py:[0,0,0,0,0],
+
+ r:240,g:130,b:20,
+ alpha:.50
+},
+
+{
+ name:"Green Tail",
+ x:240,y:390,
+ scale:1,
+ rotation:.2,
+
+ ax:[100,50,20,10,5],
+ ay:[45,-30,15,10,5],
+
+ px:[0,0,.5,0,0],
+ py:[0,.4,0,0,0],
+
+ r:40,g:170,b:80,
+ alpha:.40
+}
+
+];
+
+
+// =====================================================
+// SELECTOR
+// =====================================================
+
+const selector =
+    document.getElementById("component");
+
+blobs.forEach((b,i)=>{
+
+    let option =
+        document.createElement("option");
+
+    option.value=i;
+    option.textContent=b.name;
+
+    selector.appendChild(option);
+
+});
+
+let selected=0;
+
+selector.onchange=function(){
+
+    selected=Number(this.value);
+
+    buildControls();
+
+};
+
+
+// =====================================================
+// SLIDER CREATION
+// =====================================================
+
+function slider(
+    parent,
+    label,
+    value,
+    min,
+    max,
+    step,
+    callback
+){
+
+    let div=
+        document.createElement("div");
+
+    div.className="control";
+
+
+    let lab=
+        document.createElement("label");
+
+    lab.textContent=label;
+
+
+    let input=
+        document.createElement("input");
+
+    input.type="range";
+    input.min=min;
+    input.max=max;
+    input.step=step;
+    input.value=value;
+
+
+    let val=
+        document.createElement("span");
+
+    val.className="value";
+    val.textContent=
+        Number(value).toFixed(2);
+
+
+    input.oninput=function(){
+
+        let v=
+            Number(this.value);
+
+        val.textContent=
+            v.toFixed(2);
+
+        callback(v);
+
+        draw();
+
+    };
+
+
+    div.appendChild(lab);
+    div.appendChild(input);
+    div.appendChild(val);
+
+    parent.appendChild(div);
+
+}
+
+
+// =====================================================
+// BUILD CONTROLS
+// =====================================================
+
+function buildControls(){
+
+    const controls=
+        document.getElementById("controls");
+
+    controls.innerHTML="";
+
+    const b=blobs[selected];
+
+
+    // -------------------------
+    // POSITION
+    // -------------------------
+
+    section(controls,"POSITION");
+
+    slider(
+        controls,
+        "X position",
+        b.x,0,750,1,
+        v=>b.x=v
+    );
+
+    slider(
+        controls,
+        "Y position",
+        b.y,0,650,1,
+        v=>b.y=v
+    );
+
+    slider(
+        controls,
+        "Scale",
+        b.scale,.2,2,.01,
+        v=>b.scale=v
+    );
+
+    slider(
+        controls,
+        "Rotation",
+        b.rotation,-3.14,3.14,.01,
+        v=>b.rotation=v
+    );
+
+
+    // -------------------------
+    // HARMONICS
+    // -------------------------
+
+    for(let n=0;n<5;n++){
+
+        section(
+            controls,
+            "HARMONIC "+(n+1)
+        );
+
+        slider(
+            controls,
+            "X amplitude",
+            b.ax[n],
+            -200,200,1,
+            v=>b.ax[n]=v
+        );
+
+        slider(
+            controls,
+            "Y amplitude",
+            b.ay[n],
+            -200,200,1,
+            v=>b.ay[n]=v
+        );
+
+        slider(
+            controls,
+            "X phase",
+            b.px[n],
+            -3.14,3.14,.01,
+            v=>b.px[n]=v
+        );
+
+        slider(
+            controls,
+            "Y phase",
+            b.py[n],
+            -3.14,3.14,.01,
+            v=>b.py[n]=v
+        );
+
+    }
+
+
+    // -------------------------
+    // COLOR
+    // -------------------------
+
+    section(controls,"COLOR");
+
+    slider(
+        controls,
+        "Red",
+        b.r,0,255,1,
+        v=>b.r=v
+    );
+
+    slider(
+        controls,
+        "Green",
+        b.g,0,255,1,
+        v=>b.g=v
+    );
+
+    slider(
+        controls,
+        "Blue",
+        b.b,0,255,1,
+        v=>b.b=v
+    );
+
+    slider(
+        controls,
+        "Opacity",
+        b.alpha,0,1,.01,
+        v=>b.alpha=v
+    );
+
+
+    updateVector();
+
+}
+
+
+function section(parent,text){
+
+    let d=
+        document.createElement("div");
+
+    d.className="section";
+
+    d.textContent=text;
+
+    parent.appendChild(d);
+
+}
+
+
+// =====================================================
+// MATHEMATICAL BLOB
+// =====================================================
+
+function drawBlob(b){
+
+    ctx.save();
+
+    ctx.translate(b.x,b.y);
+
+    ctx.rotate(b.rotation);
+
+    ctx.scale(
+        b.scale,
+        b.scale
+    );
+
+
+    ctx.beginPath();
+
+    const N=500;
+
+    for(let i=0;i<=N;i++){
+
+        let t=
+            2*Math.PI*i/N;
+
+        let x=0;
+        let y=0;
+
+
+        /*
+        ==================================
+
+        THE IMPORTANT PART
+
+        x(t) = SUM an cos(nt + phase)
+
+        y(t) = SUM bn sin(nt + phase)
+
+        ==================================
+        */
+
+        for(let n=0;n<5;n++){
+
+            let harmonic=n+1;
+
+            x +=
+                b.ax[n] *
+                Math.cos(
+                    harmonic*t
+                    + b.px[n]
+                );
+
+            y +=
+                b.ay[n] *
+                Math.sin(
+                    harmonic*t
+                    + b.py[n]
+                );
+
+        }
+
+
+        if(i===0)
+
+            ctx.moveTo(x,y);
+
+        else
+
+            ctx.lineTo(x,y);
+
+    }
+
+
+    ctx.closePath();
+
+
+    ctx.fillStyle=
+        `rgba(${b.r},
+              ${b.g},
+              ${b.b},
+              ${b.alpha})`;
+
+    ctx.fill();
+
+
+    ctx.strokeStyle=
+        `rgba(${b.r},
+              ${b.g},
+              ${b.b},
+              .9)`;
+
+    ctx.lineWidth=1;
+
+    ctx.stroke();
+
+
+    // -----------------------------------
+    // INTERNAL MATHEMATICAL CURVES
+    // -----------------------------------
+
+    ctx.strokeStyle=
+        `rgba(${b.r},
+              ${b.g},
+              ${b.b},
+              .18)`;
+
+
+    for(let j=1;j<20;j++){
+
+        let shrink=
+            j/20;
+
+        ctx.beginPath();
+
+        for(let i=0;i<=200;i++){
+
+            let t=
+                2*Math.PI*i/200;
+
+            let x=0;
+            let y=0;
+
+            for(let n=0;n<5;n++){
+
+                let harmonic=n+1;
+
+                x +=
+                    shrink *
+                    b.ax[n] *
+                    Math.cos(
+                        harmonic*t
+                        + b.px[n]
+                    );
+
+                y +=
+                    shrink *
+                    b.ay[n] *
+                    Math.sin(
+                        harmonic*t
+                        + b.py[n]
+                    );
+
+            }
+
+            if(i===0)
+                ctx.moveTo(x,y);
+            else
+                ctx.lineTo(x,y);
+
+        }
+
+        ctx.stroke();
+
+    }
+
+
+    ctx.restore();
+
+}
+
+
+// =====================================================
+// DRAW EVERYTHING
+// =====================================================
+
+function draw(){
+
+    ctx.clearRect(
+        0,0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    blobs.forEach(drawBlob);
+
+
+    updateVector();
+
+}
+
+
+// =====================================================
+// PARAMETER VECTOR
+// =====================================================
+
+function updateVector(){
+
+    const b=blobs[selected];
+
+    let text="";
+
+    text +=
+        "<b>"+b.name+"</b><br><br>";
+
+    text +=
+        "position = ["+
+        b.x.toFixed(0)+", "+
+        b.y.toFixed(0)+"]<br>";
+
+    text +=
+        "scale = "+
+        b.scale.toFixed(2)+"<br>";
+
+    text +=
+        "rotation = "+
+        b.rotation.toFixed(2)+"<br><br>";
+
+
+    for(let n=0;n<5;n++){
+
+        text +=
+            "H"+(n+1)+
+            " = ["+
+            b.ax[n].toFixed(0)+", "+
+            b.ay[n].toFixed(0)+", "+
+            b.px[n].toFixed(2)+", "+
+            b.py[n].toFixed(2)+
+            "]<br>";
+
+    }
+
+
+    text +=
+        "<br>RGB = ["+
+        b.r.toFixed(0)+", "+
+        b.g.toFixed(0)+", "+
+        b.b.toFixed(0)+"]";
+
+
+    document.getElementById(
+        "vector"
+    ).innerHTML=text;
+
+}
+
+
+buildControls();
+
+draw();
+
+</script>
+
+</body>
+</html>
