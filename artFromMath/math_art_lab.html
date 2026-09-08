@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mathematical Art Laboratory</title>
+
+<style>
+body {
+    font-family: monospace;
+    margin: 20px;
+    background: #eee;
+}
+
+h2 { margin-bottom: 5px; }
+
+.main {
+    display: flex;
+    gap: 25px;
+    align-items: flex-start;
+}
+
+canvas {
+    background: white;
+    border: 1px solid #777;
+}
+
+.panel {
+    background: white;
+    padding: 15px;
+    width: 430px;
+    border: 1px solid #aaa;
+}
+
+.control {
+    margin: 9px 0;
+}
+
+label {
+    display: inline-block;
+    width: 110px;
+}
+
+input[type=range] {
+    width: 220px;
+}
+
+.value {
+    display: inline-block;
+    width: 60px;
+    text-align: right;
+}
+
+select {
+    font-family: monospace;
+    font-size: 16px;
+    width: 200px;
+}
+
+.vector {
+    margin-top: 20px;
+    padding: 10px;
+    background: #111;
+    color: #0f0;
+    line-height: 1.5;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Mathematical Art Laboratory</h2>
+
+<p>
+The image is the sum/overlap of mathematical components.
+Move the parameters and watch the image change.
+</p>
+
+<div class="main">
+
+<canvas id="canvas" width="750" height="650"></canvas>
+
+<div class="panel">
+
+<b>Mathematical Component</b><br><br>
+
+<select id="component"></select>
+
+<hr>
+
+<div id="controls"></div>
+
+<div class="vector" id="vector"></div>
+
+</div>
+</div>
+
+<script>
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+
+// -----------------------------------------------------
+// MATHEMATICAL COMPONENTS
+// -----------------------------------------------------
+
+const objects = [
+
+{
+    name:"Left Wing",
+    x:320,
+    y:300,
+    sx:210,
+    sy:85,
+    angle:-0.45,
+    shape:2.0,
+    freq:5,
+    r:40,
+    g:100,
+    b:220,
+    alpha:.45
+},
+
+{
+    name:"Right Wing",
+    x:440,
+    y:300,
+    sx:210,
+    sy:85,
+    angle:0.45,
+    shape:2.0,
+    freq:5,
+    r:30,
+    g:130,
+    b:230,
+    alpha:.45
+},
+
+{
+    name:"Body",
+    x:380,
+    y:360,
+    sx:140,
+    sy:50,
+    angle:0,
+    shape:2,
+    freq:3,
+    r:240,
+    g:100,
+    b:30,
+    alpha:.60
+},
+
+{
+    name:"Tail",
+    x:250,
+    y:390,
+    sx:130,
+    sy:60,
+    angle:0.2,
+    shape:1.5,
+    freq:7,
+    r:220,
+    g:40,
+    b:60,
+    alpha:.45
+},
+
+{
+    name:"Head",
+    x:515,
+    y:345,
+    sx:45,
+    sy:45,
+    angle:0,
+    shape:2,
+    freq:4,
+    r:230,
+    g:170,
+    b:30,
+    alpha:.75
+}
+
+];
+
+
+// -----------------------------------------------------
+// CONTROLS
+// -----------------------------------------------------
+
+const definitions = [
+
+["x","X position",0,750,1],
+["y","Y position",0,650,1],
+
+["sx","X scale",10,300,1],
+["sy","Y scale",10,200,1],
+
+["angle","Rotation",-3.14,3.14,.01],
+
+["shape","Shape",.3,6,.05],
+
+["freq","Frequency",1,15,.1],
+
+["r","Red",0,255,1],
+["g","Green",0,255,1],
+["b","Blue",0,255,1],
+
+["alpha","Strength",0,1,.01]
+
+];
+
+let selected = 0;
+
+const selector = document.getElementById("component");
+
+objects.forEach((o,i)=>{
+
+    let option=document.createElement("option");
+
+    option.value=i;
+    option.textContent=o.name;
+
+    selector.appendChild(option);
+
+});
+
+selector.onchange=function(){
+
+    selected=Number(this.value);
+
+    buildControls();
+
+};
+
+
+// -----------------------------------------------------
+// BUILD SLIDERS
+// -----------------------------------------------------
+
+function buildControls(){
+
+    const container =
+        document.getElementById("controls");
+
+    container.innerHTML="";
+
+    const obj=objects[selected];
+
+    definitions.forEach(d=>{
+
+        const [key,label,min,max,step]=d;
+
+        let div=document.createElement("div");
+        div.className="control";
+
+        let lab=document.createElement("label");
+        lab.textContent=label;
+
+        let slider=document.createElement("input");
+
+        slider.type="range";
+        slider.min=min;
+        slider.max=max;
+        slider.step=step;
+        slider.value=obj[key];
+
+        let value=document.createElement("span");
+
+        value.className="value";
+        value.textContent=obj[key];
+
+        slider.oninput=function(){
+
+            obj[key]=Number(this.value);
+
+            value.textContent=
+                Number(this.value).toFixed(2);
+
+            draw();
+
+        };
+
+        div.appendChild(lab);
+        div.appendChild(slider);
+        div.appendChild(value);
+
+        container.appendChild(div);
+
+    });
+
+    updateVector();
+
+}
+
+
+// -----------------------------------------------------
+// MATHEMATICAL SHAPE
+// -----------------------------------------------------
+
+function mathematicalShape(o){
+
+    ctx.save();
+
+    ctx.translate(o.x,o.y);
+    ctx.rotate(o.angle);
+
+    ctx.beginPath();
+
+    const N=300;
+
+    for(let i=0;i<=N;i++){
+
+        let t=
+            2*Math.PI*i/N;
+
+        /*
+        Basic parametric object
+
+        cos(t), sin(t)
+
+        create an ellipse.
+
+        The additional sine term
+        mathematically deforms it.
+        */
+
+        let deformation =
+            1
+            + .18 *
+            Math.sin(o.freq*t);
+
+        let x =
+            o.sx *
+            Math.sign(Math.cos(t)) *
+            Math.pow(
+                Math.abs(Math.cos(t)),
+                2/o.shape
+            );
+
+        let y =
+            o.sy *
+            Math.sign(Math.sin(t)) *
+            Math.pow(
+                Math.abs(Math.sin(t)),
+                2/o.shape
+            );
+
+        x *= deformation;
+        y *= deformation;
+
+        if(i===0)
+            ctx.moveTo(x,y);
+        else
+            ctx.lineTo(x,y);
+
+    }
+
+    ctx.closePath();
+
+    ctx.fillStyle=
+        "rgba("+
+        o.r+","+
+        o.g+","+
+        o.b+","+
+        o.alpha+")";
+
+    ctx.fill();
+
+    ctx.strokeStyle=
+        "rgba("+
+        o.r+","+
+        o.g+","+
+        o.b+",.8)";
+
+    ctx.lineWidth=1;
+
+    ctx.stroke();
+
+    ctx.restore();
+
+}
+
+
+// -----------------------------------------------------
+// INTERNAL MATHEMATICAL LINES
+// -----------------------------------------------------
+
+function mathematicalLines(o){
+
+    ctx.save();
+
+    ctx.translate(o.x,o.y);
+    ctx.rotate(o.angle);
+
+    ctx.strokeStyle=
+        "rgba("+
+        o.r+","+
+        o.g+","+
+        o.b+",.30)";
+
+    ctx.lineWidth=.7;
+
+    const N=80;
+
+    for(let i=0;i<N;i++){
+
+        let t=i/(N-1);
+
+        let yy=
+            -o.sy +
+            2*o.sy*t;
+
+        let width=
+            o.sx *
+            Math.sqrt(
+                Math.max(
+                    0,
+                    1-
+                    (yy*yy)/(o.sy*o.sy)
+                )
+            );
+
+        /*
+        Lines curve indirectly because
+        their endpoints oscillate.
+        */
+
+        let wave=
+            20*
+            Math.sin(
+                o.freq*Math.PI*t
+            );
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            -width,
+            yy
+        );
+
+        ctx.lineTo(
+            width,
+            yy+wave
+        );
+
+        ctx.stroke();
+
+    }
+
+    ctx.restore();
+
+}
+
+
+// -----------------------------------------------------
+// DRAW COMPLETE IMAGE
+// -----------------------------------------------------
+
+function draw(){
+
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    /*
+    The image is conceptually
+
+        IMAGE =
+        T1 + T2 + T3 + ... + Tn
+
+    Each mathematical component
+    contributes to the final image.
+    */
+
+    objects.forEach(o=>{
+
+        mathematicalShape(o);
+        mathematicalLines(o);
+
+    });
+
+    updateVector();
+
+}
+
+
+// -----------------------------------------------------
+// SHOW PARAMETER VECTOR
+// -----------------------------------------------------
+
+function updateVector(){
+
+    const o=objects[selected];
+
+    document.getElementById("vector").innerHTML=
+
+    "<b>"+o.name+"</b><br><br>"+
+
+    "θ = ["+
+
+    o.x.toFixed(1)+", "+
+    o.y.toFixed(1)+", "+
+    o.sx.toFixed(1)+", "+
+    o.sy.toFixed(1)+", "+
+    o.angle.toFixed(2)+", "+
+    o.shape.toFixed(2)+", "+
+    o.freq.toFixed(2)+", "+
+    o.r.toFixed(0)+", "+
+    o.g.toFixed(0)+", "+
+    o.b.toFixed(0)+", "+
+    o.alpha.toFixed(2)+
+
+    "]";
+
+}
+
+
+buildControls();
+draw();
+
+</script>
+
+</body>
+</html>
