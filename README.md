@@ -12,3 +12,9 @@
 
 * https://rcalix1.github.io/artAI/web/index.html
 * 
+
+
+## Dino
+
+* python -m uvicorn app:app --host 127.0.0.1 --port 9000
+* http://localhost:9000
